@@ -2,7 +2,11 @@ import { useState, useEffect } from 'react';
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { MapPin, Clock, Users, Navigation } from 'lucide-react';
+import { Progress } from '@/components/ui/progress';
+import { MapPin, Clock, Users, Navigation, Wifi, WifiOff, Brain } from 'lucide-react';
+import { etaService, ETAPrediction, BusPosition } from '@/services/etaService';
+import { languageService } from '@/services/languageService';
+import { notificationService } from '@/services/notificationService';
 
 interface Bus {
   id: string;
@@ -13,6 +17,9 @@ interface Bus {
   occupancy: number;
   delay: number;
   status: 'on-time' | 'delayed' | 'arriving';
+  gpsActive: boolean;
+  etaPrediction?: ETAPrediction;
+  lastGpsUpdate: number;
 }
 
 interface Stop {
@@ -21,7 +28,7 @@ interface Stop {
   buses: Bus[];
 }
 
-// Mock data for demonstration
+// Enhanced mock data with GPS status and AI predictions
 const mockStops: Stop[] = [
   {
     id: 'stop1',
@@ -35,7 +42,9 @@ const mockStops: Stop[] = [
         eta: 3,
         occupancy: 75,
         delay: 0,
-        status: 'arriving'
+        status: 'arriving',
+        gpsActive: true,
+        lastGpsUpdate: Date.now() - 30000
       },
       {
         id: 'bus2',
@@ -45,7 +54,9 @@ const mockStops: Stop[] = [
         eta: 8,
         occupancy: 45,
         delay: 2,
-        status: 'delayed'
+        status: 'delayed',
+        gpsActive: false,
+        lastGpsUpdate: Date.now() - 300000 // 5 minutes ago
       }
     ]
   },
@@ -61,7 +72,9 @@ const mockStops: Stop[] = [
         eta: 5,
         occupancy: 60,
         delay: 0,
-        status: 'on-time'
+        status: 'on-time',
+        gpsActive: true,
+        lastGpsUpdate: Date.now() - 15000
       }
     ]
   },
@@ -77,7 +90,9 @@ const mockStops: Stop[] = [
         eta: 12,
         occupancy: 80,
         delay: 5,
-        status: 'delayed'
+        status: 'delayed',
+        gpsActive: false,
+        lastGpsUpdate: Date.now() - 600000 // 10 minutes ago
       }
     ]
   }
@@ -86,13 +101,52 @@ const mockStops: Stop[] = [
 const TransportMap = () => {
   const [selectedStop, setSelectedStop] = useState<Stop | null>(mockStops[0]);
   const [currentTime, setCurrentTime] = useState(new Date());
+  const [language, setLanguage] = useState(languageService.getCurrentLanguage());
+  const [busesWithPredictions, setBusesWithPredictions] = useState<Stop[]>(mockStops);
+
+  const t = (key: string, defaultValue?: string) => languageService.translate(key, defaultValue);
 
   useEffect(() => {
     const timer = setInterval(() => {
       setCurrentTime(new Date());
-    }, 1000);
-    return () => clearInterval(timer);
+      updateETAPredictions();
+    }, 2000); // Update every 2 seconds
+
+    const unsubscribeLang = languageService.subscribe(() => {
+      setLanguage(languageService.getCurrentLanguage());
+    });
+
+    return () => {
+      clearInterval(timer);
+      unsubscribeLang();
+    };
   }, []);
+
+  const updateETAPredictions = () => {
+    setBusesWithPredictions(current => 
+      current.map(stop => ({
+        ...stop,
+        buses: stop.buses.map(bus => {
+          const busPosition: BusPosition = {
+            busId: bus.id,
+            route: bus.route,
+            lastKnownStop: bus.currentStop,
+            timestamp: bus.lastGpsUpdate,
+            gpsAvailable: bus.gpsActive
+          };
+
+          const etaPrediction = etaService.predictETA(busPosition, stop.id, []);
+          
+          return {
+            ...bus,
+            eta: etaPrediction.eta,
+            etaPrediction,
+            occupancy: etaService.predictOccupancy(bus.route)
+          };
+        })
+      }))
+    );
+  };
 
   const getStatusColor = (status: string) => {
     switch (status) {
@@ -117,9 +171,9 @@ const TransportMap = () => {
     <div className="space-y-6">
       {/* Header */}
       <div className="text-center space-y-2">
-        <h1 className="text-2xl font-bold text-foreground">Live Bus Tracking</h1>
+        <h1 className="text-2xl font-bold text-foreground">{t('tracking.title')}</h1>
         <p className="text-muted-foreground">
-          {currentTime.toLocaleTimeString()} • Real-time updates
+          {currentTime.toLocaleTimeString()} • {t('tracking.realtime')}
         </p>
       </div>
 
@@ -159,7 +213,7 @@ const TransportMap = () => {
 
       {/* Stop Selector */}
       <div className="flex gap-2 overflow-x-auto pb-2">
-        {mockStops.map((stop) => (
+        {busesWithPredictions.map((stop) => (
           <Button
             key={stop.id}
             variant={selectedStop?.id === stop.id ? "default" : "outline"}
@@ -177,13 +231,13 @@ const TransportMap = () => {
         <div className="space-y-4">
           <h2 className="text-lg font-semibold flex items-center gap-2">
             <Navigation className="h-5 w-5 text-primary" />
-            Buses arriving at {selectedStop.name}
+            {t('tracking.arrivingAt')} {selectedStop.name}
           </h2>
           
           {selectedStop.buses.length === 0 ? (
             <Card>
               <CardContent className="p-6 text-center">
-                <p className="text-muted-foreground">No buses currently scheduled for this stop.</p>
+                <p className="text-muted-foreground">{t('tracking.noBuses')}</p>
               </CardContent>
             </Card>
           ) : (
@@ -193,37 +247,67 @@ const TransportMap = () => {
                   <CardContent className="p-4">
                     <div className="flex items-center justify-between">
                       <div className="space-y-2">
-                        <div className="flex items-center gap-2">
+                        <div className="flex items-center gap-2 flex-wrap">
                           <Badge variant="outline" className="font-semibold">
                             {bus.route}
                           </Badge>
                           <Badge className={getStatusColor(bus.status)}>
-                            {bus.status.replace('-', ' ').toUpperCase()}
+                            {t(`status.${bus.status.replace('-', '')}`).toUpperCase()}
                           </Badge>
+                          {!bus.gpsActive && (
+                            <Badge variant="outline" className="text-warning">
+                              <Brain className="h-3 w-3 mr-1" />
+                              AI Predicted
+                            </Badge>
+                          )}
                         </div>
                         
                         <div className="text-sm text-muted-foreground">
-                          From: {bus.currentStop}
-                        </div>
-                      </div>
-                      
-                      <div className="text-right space-y-1">
-                        <div className="flex items-center gap-1 text-lg font-bold">
-                          <Clock className="h-4 w-4" />
-                          {bus.eta} min
+                          {t('tracking.from')}: {bus.currentStop}
                         </div>
                         
-                        <div className="flex items-center gap-4 text-sm">
-                          <span className={`flex items-center gap-1 ${getOccupancyColor(bus.occupancy)}`}>
-                            <Users className="h-3 w-3" />
-                            {bus.occupancy}%
-                          </span>
-                          
-                          {bus.delay > 0 && (
-                            <span className="text-warning">
-                              +{bus.delay}min delay
+                        {bus.etaPrediction && !bus.gpsActive && (
+                          <div className="text-xs text-warning flex items-center gap-1">
+                            <WifiOff className="h-3 w-3" />
+                            {t('eta.predicted')} • {Math.round(bus.etaPrediction.confidence * 100)}% confidence
+                          </div>
+                        )}
+                        
+                        {bus.gpsActive && (
+                          <div className="text-xs text-success flex items-center gap-1">
+                            <Wifi className="h-3 w-3" />
+                            {t('eta.gps')}
+                          </div>
+                        )}
+                      </div>
+                      
+                      <div className="text-right space-y-2">
+                        <div className="flex items-center gap-1 text-lg font-bold">
+                          <Clock className="h-4 w-4" />
+                          {bus.eta} {t('tracking.minutes')}
+                        </div>
+                        
+                        <div className="space-y-2">
+                          <div className="flex items-center gap-4 text-sm">
+                            <span className={`flex items-center gap-1 ${getOccupancyColor(bus.occupancy)}`}>
+                              <Users className="h-3 w-3" />
+                              {Math.round(bus.occupancy)}%
                             </span>
-                          )}
+                            
+                            {bus.delay > 0 && (
+                              <span className="text-warning">
+                                +{bus.delay}min {t('tracking.delay')}
+                              </span>
+                            )}
+                          </div>
+                          
+                          {/* Occupancy Progress Bar */}
+                          <div className="w-20">
+                            <Progress 
+                              value={bus.occupancy} 
+                              className="h-2"
+                            />
+                          </div>
                         </div>
                       </div>
                     </div>
