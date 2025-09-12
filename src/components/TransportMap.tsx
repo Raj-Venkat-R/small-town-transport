@@ -7,6 +7,9 @@ import { MapPin, Clock, Users, Navigation, Wifi, WifiOff, Brain } from 'lucide-r
 import { etaService, ETAPrediction, BusPosition } from '@/services/etaService';
 import { languageService } from '@/services/languageService';
 import { notificationService } from '@/services/notificationService';
+import { lazy, Suspense } from 'react';
+
+const InteractiveMap = lazy(() => import('@/components/InteractiveMap'));
 
 interface Bus {
   id: string;
@@ -20,6 +23,7 @@ interface Bus {
   gpsActive: boolean;
   etaPrediction?: ETAPrediction;
   lastGpsUpdate: number;
+  position?: [number, number]; // GPS coordinates [lat, lng]
 }
 
 interface Stop {
@@ -28,7 +32,7 @@ interface Stop {
   buses: Bus[];
 }
 
-// Enhanced mock data with GPS status and AI predictions
+// Enhanced mock data with GPS coordinates and AI predictions
 const mockStops: Stop[] = [
   {
     id: 'stop1',
@@ -44,7 +48,8 @@ const mockStops: Stop[] = [
         delay: 0,
         status: 'arriving',
         gpsActive: true,
-        lastGpsUpdate: Date.now() - 30000
+        lastGpsUpdate: Date.now() - 30000,
+        position: [12.9716, 77.5946] // Current bus position
       },
       {
         id: 'bus2',
@@ -56,7 +61,8 @@ const mockStops: Stop[] = [
         delay: 2,
         status: 'delayed',
         gpsActive: false,
-        lastGpsUpdate: Date.now() - 300000 // 5 minutes ago
+        lastGpsUpdate: Date.now() - 300000, // 5 minutes ago
+        position: [12.9750, 77.6100] // Estimated position
       }
     ]
   },
@@ -74,7 +80,8 @@ const mockStops: Stop[] = [
         delay: 0,
         status: 'on-time',
         gpsActive: true,
-        lastGpsUpdate: Date.now() - 15000
+        lastGpsUpdate: Date.now() - 15000,
+        position: [12.9780, 77.6200] // Current bus position
       }
     ]
   },
@@ -92,11 +99,25 @@ const mockStops: Stop[] = [
         delay: 5,
         status: 'delayed',
         gpsActive: false,
-        lastGpsUpdate: Date.now() - 600000 // 10 minutes ago
+        lastGpsUpdate: Date.now() - 600000, // 10 minutes ago
+        position: [12.9650, 77.5800] // Estimated position
       }
     ]
   }
 ];
+
+// Map stop data for the interactive map
+const mapStops = mockStops.map(stop => ({
+  id: stop.id,
+  name: stop.name,
+  position: (
+    // Convert stop names to approximate coordinates
+    stop.id === 'stop1' ? [12.9716, 77.5946] : // City Center
+    stop.id === 'stop2' ? [12.9750, 77.6100] : // Railway Station
+    [12.9650, 77.5800] // University Campus
+  ) as [number, number],
+  buses: stop.buses
+}));
 
 const TransportMap = () => {
   const [selectedStop, setSelectedStop] = useState<Stop | null>(mockStops[0]);
@@ -107,6 +128,9 @@ const TransportMap = () => {
   const t = (key: string, defaultValue?: string) => languageService.translate(key, defaultValue);
 
   useEffect(() => {
+    // Ensure language service is initialized
+    languageService.initialize();
+    
     const timer = setInterval(() => {
       setCurrentTime(new Date());
       updateETAPredictions();
@@ -171,45 +195,34 @@ const TransportMap = () => {
     <div className="space-y-6">
       {/* Header */}
       <div className="text-center space-y-2">
-        <h1 className="text-2xl font-bold text-foreground">{t('tracking.title')}</h1>
+        <h1 className="text-2xl font-bold text-foreground">{t('tracking.title', 'Live Bus Tracking')}</h1>
         <p className="text-muted-foreground">
-          {currentTime.toLocaleTimeString()} • {t('tracking.realtime')}
+          {currentTime.toLocaleTimeString()} • {t('tracking.realtime', 'Real-time updates')}
         </p>
       </div>
 
-      {/* Map Area - Simulated */}
-      <Card className="relative">
-        <CardContent className="p-0">
-          <div className="h-64 bg-accent rounded-lg relative overflow-hidden">
-            <div className="absolute inset-0 bg-gradient-to-br from-accent to-accent/80" />
-            
-            {/* Simulated bus positions */}
-            {mockStops.map((stop, index) => (
-              <Button
-                key={stop.id}
-                variant="ghost"
-                className={`absolute p-2 rounded-full ${
-                  selectedStop?.id === stop.id 
-                    ? 'bg-primary text-primary-foreground' 
-                    : 'bg-card shadow-md hover:bg-card/90'
-                }`}
-                style={{
-                  left: `${20 + index * 25}%`,
-                  top: `${30 + (index % 2) * 30}%`,
-                }}
-                onClick={() => setSelectedStop(stop)}
-              >
-                <MapPin className="h-4 w-4" />
-              </Button>
-            ))}
-            
-            {/* Map overlay */}
-            <div className="absolute bottom-4 left-4 text-xs text-muted-foreground">
-              Interactive Map • Tap stops for details
+      {/* Interactive Map */}
+      <Suspense fallback={
+        <Card className="relative">
+          <CardContent className="p-0">
+            <div className="h-64 bg-accent rounded-lg flex items-center justify-center">
+              <div className="text-center">
+                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto mb-2"></div>
+                <p className="text-muted-foreground text-sm">Loading map...</p>
+              </div>
             </div>
-          </div>
-        </CardContent>
-      </Card>
+          </CardContent>
+        </Card>
+      }>
+        <InteractiveMap
+          stops={mapStops}
+          selectedStop={selectedStop ? mapStops.find(s => s.id === selectedStop.id) || null : null}
+          onStopSelect={(stop) => {
+            const originalStop = mockStops.find(s => s.id === stop.id);
+            if (originalStop) setSelectedStop(originalStop);
+          }}
+        />
+      </Suspense>
 
       {/* Stop Selector */}
       <div className="flex gap-2 overflow-x-auto pb-2">
@@ -231,13 +244,13 @@ const TransportMap = () => {
         <div className="space-y-4">
           <h2 className="text-lg font-semibold flex items-center gap-2">
             <Navigation className="h-5 w-5 text-primary" />
-            {t('tracking.arrivingAt')} {selectedStop.name}
+            {t('tracking.arrivingAt', 'Buses arriving at')} {selectedStop.name}
           </h2>
           
           {selectedStop.buses.length === 0 ? (
             <Card>
               <CardContent className="p-6 text-center">
-                <p className="text-muted-foreground">{t('tracking.noBuses')}</p>
+                <p className="text-muted-foreground">{t('tracking.noBuses', 'No buses currently scheduled for this stop')}</p>
               </CardContent>
             </Card>
           ) : (

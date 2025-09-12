@@ -19,9 +19,15 @@ import {
   Zap
 } from 'lucide-react';
 import { languageService } from '@/services/languageService';
+import { useEffect } from 'react';
 
 const AdminDashboard = () => {
   const t = (key: string, defaultValue?: string) => languageService.translate(key, defaultValue);
+  
+  useEffect(() => {
+    // Ensure language service is initialized
+    languageService.initialize();
+  }, []);
   
   // Enhanced mock data for comprehensive dashboard
   const fleetStats = {
@@ -41,10 +47,10 @@ const AdminDashboard = () => {
   };
 
   const routes = [
-    { id: 'R15', name: 'Route 15', onTimePercentage: 92, averageDelay: 2.1, ridership: 156 },
-    { id: 'R8', name: 'Route 8', onTimePercentage: 87, averageDelay: 4.2, ridership: 203 },
-    { id: 'R12', name: 'Route 12', onTimePercentage: 95, averageDelay: 1.8, ridership: 134 },
-    { id: 'R25', name: 'Route 25', onTimePercentage: 78, averageDelay: 6.1, ridership: 189 },
+    { id: 'R15', name: 'Route 15', onTimePercentage: 92, averageDelay: 2.1, ridership: 156, co2Saved: 1.2 },
+    { id: 'R8', name: 'Route 8', onTimePercentage: 87, averageDelay: 4.2, ridership: 203, co2Saved: 1.5 },
+    { id: 'R12', name: 'Route 12', onTimePercentage: 95, averageDelay: 1.8, ridership: 134, co2Saved: 1.0 },
+    { id: 'R25', name: 'Route 25', onTimePercentage: 78, averageDelay: 6.1, ridership: 189, co2Saved: 1.4 },
   ];
 
   const recentAlerts = [
@@ -52,6 +58,34 @@ const AdminDashboard = () => {
     { id: 2, type: 'breakdown', route: 'Route 25', message: 'Bus breakdown reported at University Campus', time: '15 min ago' },
     { id: 3, type: 'capacity', route: 'Route 15', message: 'High occupancy (95%) reported', time: '23 min ago' },
   ];
+
+  const predictiveInsights = [
+    {
+      prediction: 'Route 25 will experience delays during peak hours',
+      impact: 'Consider deploying additional buses or adjusting schedules',
+      confidence: 87,
+      icon: <TrendingUp className="h-4 w-4" />
+    },
+    {
+      prediction: 'High ridership expected on Route 8 tomorrow morning',
+      impact: 'Prepare for increased capacity requirements',
+      confidence: 92,
+      icon: <Users className="h-4 w-4" />
+    },
+    {
+      prediction: 'Weather conditions may affect Route 12 performance',
+      impact: 'Monitor road conditions and adjust ETAs accordingly',
+      confidence: 75,
+      icon: <AlertTriangle className="h-4 w-4" />
+    }
+  ];
+
+  const sustainabilityMetrics = {
+    totalCO2Saved: 5.8,
+    fuelSaved: 2340,
+    privateCarsReplaced: 156,
+    costSavingsToCommuters: 156000
+  };
 
   const getPerformanceColor = (percentage: number) => {
     if (percentage >= 90) return 'text-success';
@@ -78,8 +112,8 @@ const AdminDashboard = () => {
     <div className="space-y-6">
       {/* Header */}
       <div className="space-y-2">
-        <h1 className="text-2xl font-bold">{t('admin.title')}</h1>
-        <p className="text-muted-foreground">{t('admin.subtitle')}</p>
+        <h1 className="text-2xl font-bold">{t('admin.title', 'Transport Authority Dashboard')}</h1>
+        <p className="text-muted-foreground">{t('admin.subtitle', 'Real-time fleet monitoring and analytics')}</p>
       </div>
 
       <Tabs defaultValue="overview" className="space-y-6">
@@ -96,7 +130,7 @@ const AdminDashboard = () => {
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
             <Card>
               <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <CardTitle className="text-sm font-medium">{t('admin.activeBuses')}</CardTitle>
+                <CardTitle className="text-sm font-medium">{t('admin.activeBuses', 'Active Buses')}</CardTitle>
                 <Bus className="h-4 w-4 text-primary" />
               </CardHeader>
               <CardContent>
@@ -155,6 +189,7 @@ const AdminDashboard = () => {
               </CardContent>
             </Card>
           </div>
+        </TabsContent>
 
         <TabsContent value="routes" className="space-y-6">
           {/* Route Performance */}
@@ -375,33 +410,33 @@ const AdminDashboard = () => {
             </CardContent>
           </Card>
         </TabsContent>
-
-        {/* Recent Alerts - Always Visible */}
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <AlertTriangle className="h-5 w-5" />
-              {t('admin.recentAlerts')}
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="space-y-3">
-              {recentAlerts.map((alert) => (
-                <div key={alert.id} className="flex items-start gap-3 p-3 rounded-lg bg-muted/50">
-                  {getAlertIcon(alert.type)}
-                  <div className="flex-1 space-y-1">
-                    <div className="flex items-center justify-between">
-                      <Badge variant="outline">{alert.route}</Badge>
-                      <span className="text-xs text-muted-foreground">{alert.time}</span>
-                    </div>
-                    <p className="text-sm">{alert.message}</p>
-                  </div>
-                </div>
-              ))}
-            </div>
-          </CardContent>
-        </Card>
       </Tabs>
+
+      {/* Recent Alerts - Always Visible */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <AlertTriangle className="h-5 w-5" />
+            {t('admin.recentAlerts', 'Recent Alerts')}
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="space-y-3">
+            {recentAlerts.map((alert) => (
+              <div key={alert.id} className="flex items-start gap-3 p-3 rounded-lg bg-muted/50">
+                {getAlertIcon(alert.type)}
+                <div className="flex-1 space-y-1">
+                  <div className="flex items-center justify-between">
+                    <Badge variant="outline">{alert.route}</Badge>
+                    <span className="text-xs text-muted-foreground">{alert.time}</span>
+                  </div>
+                  <p className="text-sm">{alert.message}</p>
+                </div>
+              </div>
+            ))}
+          </div>
+        </CardContent>
+      </Card>
     </div>
   );
 };

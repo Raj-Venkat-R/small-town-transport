@@ -1,11 +1,11 @@
 import { useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
-import { MapPin, BarChart3, Settings, Menu, X } from 'lucide-react';
+import { MapPin, BarChart3, Bell, Menu, X } from 'lucide-react';
 
 interface NavigationProps {
-  currentView: 'tracking' | 'admin';
-  onViewChange: (view: 'tracking' | 'admin') => void;
+  currentView: 'tracking' | 'admin' | 'alerts';
+  onViewChange: (view: 'tracking' | 'admin' | 'alerts') => void;
 }
 
 const Navigation = ({ currentView, onViewChange }: NavigationProps) => {
@@ -23,6 +23,12 @@ const Navigation = ({ currentView, onViewChange }: NavigationProps) => {
       label: 'Admin Dashboard',
       icon: BarChart3,
       description: 'Fleet monitoring & analytics'
+    },
+    {
+      id: 'alerts',
+      label: 'Alerts',
+      icon: Bell,
+      description: 'Notifications & alerts'
     }
   ];
 
@@ -55,7 +61,7 @@ const Navigation = ({ currentView, onViewChange }: NavigationProps) => {
                     variant={currentView === item.id ? "default" : "ghost"}
                     className="w-full justify-start"
                     onClick={() => {
-                      onViewChange(item.id as 'tracking' | 'admin');
+                      onViewChange(item.id as 'tracking' | 'admin' | 'alerts');
                       setIsMobileMenuOpen(false);
                     }}
                   >
@@ -86,7 +92,7 @@ const Navigation = ({ currentView, onViewChange }: NavigationProps) => {
                     <Button
                       variant={currentView === item.id ? "default" : "ghost"}
                       className="w-full justify-start h-auto p-3"
-                      onClick={() => onViewChange(item.id as 'tracking' | 'admin')}
+                      onClick={() => onViewChange(item.id as 'tracking' | 'admin' | 'alerts')}
                     >
                       <div className="flex items-start gap-3">
                         <Icon className="h-5 w-5 mt-0.5" />

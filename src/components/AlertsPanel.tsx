@@ -23,6 +23,9 @@ const AlertsPanel = () => {
   const t = (key: string, defaultValue?: string) => languageService.translate(key, defaultValue);
 
   useEffect(() => {
+    // Ensure language service is initialized
+    languageService.initialize();
+    
     // Subscribe to new alerts
     const unsubscribe = notificationService.subscribe((newAlert) => {
       setAlerts(current => [newAlert, ...current.slice(0, 9)]);
